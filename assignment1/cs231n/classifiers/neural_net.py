@@ -79,8 +79,17 @@ class TwoLayerNet(object):
         # shape (N, C).                                                             #
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-        pass
+        
+        b1 = b1[np.newaxis, :]
+        b2 = b2[np.newaxis, :]
+        process_forward = {} # stage the forward computation
+        process_backward = {} # stage the backward computation
+        O1 = X.dot(W1)+b1
+        process_forward['O1'] = O1
+        Max = O1[O1<0]
+        process_forard['Max'] = Max
+        scores = Max.dot(W2)+b2
+        process_forward['O2'] = scores
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -98,7 +107,18 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        num_classes = W2.shape[1]
+        num_train = N
+        p = np.exp(scores) # (N,C)
+        div = np.sum(p, axis=1)
+        div = div[:, np.newaxis]
+        p = p / div
+        lossP = p[np.arange(num_train), y]
+        lossP = -np.log(lossP)
+        process_forward['Softmax'] = lossP
+        loss = np.sum(lossP)
+        loss /= num_train
+        loss += reg * (np.sum(W1*W1)+np.sum(W2*W2))
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -111,7 +131,7 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
