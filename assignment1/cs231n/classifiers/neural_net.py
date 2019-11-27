@@ -79,18 +79,13 @@ class TwoLayerNet(object):
         # shape (N, C).                                                             #
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+     
+        # layer1
+        h1 = np.maximum(np.dot(X,W1)+b1, 0)
+        # layer2
+        h2 = np.dot(h1,W2)+b2
+        scores = h2
         
-        b1 = b1[np.newaxis, :]
-        b2 = b2[np.newaxis, :]
-        process_forward = {} # stage the forward computation
-        process_backward = {} # stage the backward computation
-        O1 = X.dot(W1)+b1
-        process_forward['O1'] = O1
-        Max = O1[O1<0]
-        process_forard['Max'] = Max
-        scores = Max.dot(W2)+b2
-        process_forward['O2'] = scores
-
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         # If the targets are not given then jump out, we're done
@@ -107,18 +102,15 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        num_classes = W2.shape[1]
-        num_train = N
         p = np.exp(scores) # (N,C)
-        div = np.sum(p, axis=1)
-        div = div[:, np.newaxis]
+        div = np.sum(p, axis=1, keepdims=True)
         p = p / div
-        lossP = p[np.arange(num_train), y]
-        lossP = -np.log(lossP)
-        process_forward['Softmax'] = lossP
-        loss = np.sum(lossP)
-        loss /= num_train
-        loss += reg * (np.sum(W1*W1)+np.sum(W2*W2))
+        lossP = p[np.arange(N), y]
+        lossP = -np.log(lossP) #（N,)
+        data_loss = np.sum(lossP)
+        data_loss /= N # num_train
+        reg_loss = reg * (np.sum(W1*W1)+np.sum(W2*W2))
+        loss = data_loss + reg_loss
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -131,7 +123,24 @@ class TwoLayerNet(object):
         #############################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        
+        # layer2
+        dh2 = np.copy(p)
+        dh2[np.arange(N), y] -= 1
+        dh2 /= N # don't forget to divide num_train !
+        dW2 = np.dot(h1.T, dh2)
+        dW2 += 2*reg*W2
+        db2 = np.sum(dh2, axis=0)
+        grads['W2'] = dW2
+        grads['b2'] = db2
+        # layer1
+        dh1 = np.dot(dh2, W2.T)
+        dO1 = dh1
+        dO1[h1<=0] = 0 # not dO1[dO1<=0] !!!
+        dW1 = np.dot(X.T, dO1)
+        dW1 += 2*reg*W1
+        db1 = np.sum(dO1, axis=0)
+        grads['W1'] = dW1
+        grads['b1'] = db1
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -176,7 +185,10 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-            pass
+            print("num_train = {}, batch_size = {}".format(num_train, batch_size))
+            index = np.random.choice(num_train, batch_size, replace=True)
+            X_batch = X[index]
+            y_batch = y[index]
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -192,7 +204,8 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-            pass
+            for param_name in grads:
+                self.params[param_name] -= grads[param_name]*learning_rate
 
             # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
@@ -238,7 +251,15 @@ class TwoLayerNet(object):
         ###########################################################################
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-        pass
+        W1, b1 = self.params['W1'], self.params['b1']
+        W2, b2 = self.params['W2'], self.params['b2']
+        
+        # layer1
+        h1 = np.maximum(np.dot(X,W1)+b1, 0)
+        # layer2
+        h2 = np.dot(h1,W2)+b2
+        scores = h2
+        y_pred = np.argmax(scores, axis=1)
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
