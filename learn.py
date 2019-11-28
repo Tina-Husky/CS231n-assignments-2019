@@ -1,8 +1,8 @@
-def foo():
-	print("Hello Tina again")
-	print("Wow!")
-def main():
-	foo()
-
-if __name__ == '__main__':
-	main()
+class A:
+	def __init__(self):
+		self.a = 1
+		self.b = 2
+	def changea(self, a):
+		self.a = a
+	def changeb(self, b):
+		self.b = b

@@ -185,7 +185,7 @@ class TwoLayerNet(object):
             #########################################################################
             # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-            print("num_train = {}, batch_size = {}".format(num_train, batch_size))
+#             print("num_train = {}, batch_size = {}".format(num_train, batch_size))
             index = np.random.choice(num_train, batch_size, replace=True)
             X_batch = X[index]
             y_batch = y[index]
