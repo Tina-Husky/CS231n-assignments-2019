@@ -1,4 +1,4 @@
-## Take away ...
+## Some take away ...
 
 1. Iterating Over Arrays
 
@@ -12,4 +12,8 @@
 
    https://math.stackexchange.com/questions/945871/derivative-of-softmax-loss-function
 
-4. 
+4.  Introduction of fundamental concepts of [PyTorch](https://github.com/pytorch/pytorch)
+
+   https://github.com/jcjohnson/pytorch-examples#pytorch-custom-nn-modules
+
+5. 

@@ -1,5 +1,5 @@
 # cs231n-assginments
-My implementations on Stanford CS213n assignments (version: Spring 2019)
+My implementations on Stanford CS231n assignments (version: Spring 2019)
 
 ***Video*** (in bilibili): [Convolutional Neural Networks for Visual Recognition (CS231n Spring 2017) ](https://www.bilibili.com/video/av13260183?from=search&seid=13265439614647836426)
 
