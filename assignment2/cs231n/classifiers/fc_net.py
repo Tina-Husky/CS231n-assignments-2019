@@ -137,6 +137,33 @@ class TwoLayerNet(object):
 
         return loss, grads
 
+def affine_bn_relu_forward(x, w, b, gamma, beta, bn_param):
+    a, fc_cache = affine_forward(x, w, b)
+    bn_out, bn_cache = batchnorm_forward(a, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(bn_out)
+    cache = (fc_cache, bn_cache, relu_cache)
+    return out, cache
+    
+def affine_bn_relu_backward(dout, cache):
+    fc_cache, bn_cache, relu_cache = cache
+    dbn_out = relu_backward(dout, relu_cache)
+    da, dgamma, dbeta = batchnorm_backward(dbn_out, bn_cache)
+    dx, dw, db = affine_backward(da, fc_cache)
+    return dx, dw, db, dgamma, dbeta
+
+def affine_ln_relu_forward(x, w, b, gamma, beta, bn_param):
+    a, fc_cache = affine_forward(x, w, b)
+    bn_out, bn_cache = layernorm_forward(a, gamma, beta, bn_param)
+    out, relu_cache = relu_forward(bn_out)
+    cache = (fc_cache, bn_cache, relu_cache)
+    return out, cache
+    
+def affine_ln_relu_backward(dout, cache):
+    fc_cache, bn_cache, relu_cache = cache
+    dbn_out = relu_backward(dout, relu_cache)
+    da, dgamma, dbeta = layernorm_backward(dbn_out, bn_cache)
+    dx, dw, db = affine_backward(da, fc_cache)
+    return dx, dw, db, dgamma, dbeta
 
 class FullyConnectedNet(object):
     """
@@ -204,18 +231,24 @@ class FullyConnectedNet(object):
                 if self.num_layers > 1:
                     self.params['W1'] = np.random.randn(input_dim, hidden_dims[0]) * weight_scale
                     self.params['b1'] = np.zeros(hidden_dims[0])
+                    if self.normalization == 'batchnorm' or self.normalization == 'layernorm':
+                        self.params['gamma1'] = np.ones(hidden_dims[0])
+                        self.params['beta1'] = np.zeros(hidden_dims[0])
                     continue
                 else:
                     self.params['W1'] = np.random.randn(input_dim, num_classes) * weight_scale
                     self.params['b1'] = np.zeros(num_classes)
                     break
             if i == self.num_layers:
-                self.params['W{}'.format(i)] = np.random.randn(hidden_dims[-1], num_classes)
+                self.params['W{}'.format(i)] = np.random.randn(hidden_dims[-1], num_classes) * weight_scale
                 self.params['b{}'.format(i)] = np.zeros(num_classes)
-                continue
-            self.params['W{}'.format(i)] = np.random.randn(hidden_dims[i-2], hidden_dims[i-1])
+                break
+            self.params['W{}'.format(i)] = np.random.randn(hidden_dims[i-2], hidden_dims[i-1]) * weight_scale
             self.params['b{}'.format(i)] = np.zeros(hidden_dims[i-1])
-            
+            if self.normalization == 'batchnorm' or self.normalization == 'layernorm':
+                self.params['gamma{}'.format(i)] = np.ones(hidden_dims[i-1])
+                self.params['beta{}'.format(i)] = np.zeros(hidden_dims[i-1])
+                
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################
@@ -279,11 +312,25 @@ class FullyConnectedNet(object):
         # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
         L = self.num_layers
-        cache = [None] * (L + 1)
+        caches = []
         a = X
         for i in range(1, L):
-            a, cache[i] = affine_relu_forward(a, self.params['W{}'.format(i)], self.params['b{}'.format(i)])
-        out, cache[self.num_layers] = affine_forward(a, self.params['W{}'.format(L)], self.params['b{}'.format(L)])
+            if self.normalization == 'batchnorm':
+                a, cache = affine_bn_relu_forward(a, self.params['W{}'.format(i)], self.params['b{}'.format(i)],\
+                            self.params['gamma{}'.format(i)], self.params['beta{}'.format(i)], self.bn_params[i-1])
+            elif self.normalization == 'layernorm':
+                a, cache = affine_ln_relu_forward(a, self.params['W{}'.format(i)], self.params['b{}'.format(i)],\
+                            self.params['gamma{}'.format(i)], self.params['beta{}'.format(i)], {})
+            else:
+                a, cache = affine_relu_forward(a, self.params['W{}'.format(i)], self.params['b{}'.format(i)])
+            caches.append(cache)
+            
+            if self.use_dropout:
+                a, cache = dropout_forward(a, self.dropout_param)
+                caches.append(cache)
+        
+        out, cache = affine_forward(a, self.params['W{}'.format(L)], self.params['b{}'.format(L)])
+        caches.append(cache)
         
         scores = out
 
@@ -318,12 +365,22 @@ class FullyConnectedNet(object):
             reg_loss += 0.5 * self.reg * (np.sum(self.params['W{}'.format(i)]**2))
         loss = data_loss + reg_loss
         
-        dh, grads['W{}'.format(L)], grads['b{}'.format(L)] = affine_backward(dloss, cache[L])
+        dh, grads['W{}'.format(L)], grads['b{}'.format(L)] = affine_backward(dloss, caches.pop())
         grads['W{}'.format(L)] += self.reg * self.params['W{}'.format(L)]
         
         for i in range(L-1, 0, -1):
-            dh, grads['W{}'.format(i)], grads['b{}'.format(i)] = affine_relu_backward(dh, cache[i])
-            grads['W{}'.format(i)] += self.reg * self.params['W{}'.format(i)]
+            if self.use_dropout:
+                dh = dropout_backward(dh, caches.pop())
+                
+            if self.normalization == 'batchnorm':
+                dh, grads['W{}'.format(i)], grads['b{}'.format(i)], grads['gamma{}'.format(i)], grads['beta{}'.format(i)] = affine_bn_relu_backward(dh, caches.pop())
+                grads['W{}'.format(i)] += self.reg * self.params['W{}'.format(i)]
+            elif self.normalization == 'layernorm':
+                dh, grads['W{}'.format(i)], grads['b{}'.format(i)], grads['gamma{}'.format(i)], grads['beta{}'.format(i)] = affine_ln_relu_backward(dh, caches.pop())
+                grads['W{}'.format(i)] += self.reg * self.params['W{}'.format(i)]
+            else:
+                dh, grads['W{}'.format(i)], grads['b{}'.format(i)] = affine_relu_backward(dh, caches.pop())
+                grads['W{}'.format(i)] += self.reg * self.params['W{}'.format(i)]
 
         # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
         ############################################################################

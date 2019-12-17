@@ -16,4 +16,14 @@
 
    https://github.com/jcjohnson/pytorch-examples#pytorch-custom-nn-modules
 
-5. 
+5. Backprop of Batch Normalization
+
+   https://kratzert.github.io/2016/02/12/understanding-the-gradient-flow-through-the-batch-normalization-layer.html  (straightforward & interesting)
+
+   http://cthorey.github.io./backpropagation/  (breathtaking... & confusing)
+
+6. [Unbiased Estimation](./ref/unbiased_estimator.pdf)
+
+   https://www.math.arizona.edu/~jwatkins/N_unbiased.pdf
+
+7. 
