@@ -26,4 +26,18 @@
 
    https://www.math.arizona.edu/~jwatkins/N_unbiased.pdf
 
-7. 
+7. Backprop in Convolutional Layer
+
+   https://medium.com/@2017csm1006/forward-and-backpropagation-in-convolutional-neural-network-4dfa96d7b37e
+
+8. 
+
+
+
+Questions the come up when doing assignments:
+
+1. When calculating $\frac{\partial l}{\partial W}$ ( $dW$ for short) via Backprop, does $dW$ need to be divided by $N$ (i.e. train_num or batch_size) ? I observed $dW$ in `linear_SVM` in `assigment1` does, but the rest doesn't. Is there any rules that I can follow?
+
+   ***Answer:*** It depends on forward formulations. If there is $\frac{1}{N}$ in one formulation, when the stream flows back to this, $dW$ need to be divided by $N$, vice versa.
+
+2. 

@@ -335,7 +335,7 @@ def batchnorm_backward_alt(dout, cache):
     
     # faster implementation (through caculus) [from paper]
     dxhat = dout*gamma
-    dvar = np.sum(dxhat*(x-mu)*(-0.5)*(var+eps)**(3/2), axis=0)
+    dvar = np.sum(dxhat*(x-mu)*(-0.5)*(var+eps)**(-3/2), axis=0)
     dmu = np.sum(dxhat*(-1.0)/np.sqrt(var+eps), axis=0) - 2*dvar*np.sum(x-mu, axis=0)/N
     dx = dxhat/np.sqrt(var+eps) + 2*dvar*(x-mu)/N + dmu/N
     dgamma = np.sum(dout*xhat, axis=0)
@@ -386,8 +386,8 @@ def layernorm_forward(x, gamma, beta, ln_param):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
     N, D = x.shape
-    sample_mean = np.sum(x, axis=1, keepdims=True) / N #(N,1)
-    sample_var = np.sum((x-sample_mean)**2, axis=1, keepdims=True) / N #(N,1)
+    sample_mean = np.sum(x, axis=1, keepdims=True) / D #(N,1)
+    sample_var = np.sum((x-sample_mean)**2, axis=1, keepdims=True) / D #(N,1)
     xhat = (x-sample_mean) / np.sqrt(sample_var+eps)
     out = gamma * xhat + beta
     
@@ -430,10 +430,10 @@ def layernorm_backward(dout, cache):
     N,D = x.shape
     # naively implemented by computation graph
     # compute the intermediate values
-    mu = np.sum(x, axis=1, keepdims=True) / N
+    mu = np.sum(x, axis=1, keepdims=True) / D
     xmu = x - mu
     sq = xmu**2
-    var = np.sum(sq, axis=1, keepdims=True) / N
+    var = np.sum(sq, axis=1, keepdims=True) / D
     sqrtvar = np.sqrt(var+eps)
     ivar = 1 / sqrtvar
     xhat = xmu * ivar
@@ -446,11 +446,11 @@ def layernorm_backward(dout, cache):
     dxmu1 = dxhat * ivar
     dsqrtvar = -1.0 * divar / (sqrtvar**2)
     dvar = 0.5 * dsqrtvar / np.sqrt(var+eps)
-    dsq = np.ones((N, D)) * dvar / N
+    dsq = np.ones((N, D)) * dvar / D
     dxmu2 = 2 * xmu * dsq
     dmu = -np.sum(dxmu1+dxmu2, axis=1, keepdims=True)
     dx1 = dxmu1 + dxmu2
-    dx2 = np.ones((N, D)) * dmu / N
+    dx2 = np.ones((N, D)) * dmu / D
     dx = dx1 + dx2
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
@@ -554,7 +554,6 @@ def dropout_backward(dout, cache):
         dx = dout
     return dx
 
-
 def conv_forward_naive(x, w, b, conv_param):
     """
     A naive implementation of the forward pass for a convolutional layer.
@@ -590,7 +589,22 @@ def conv_forward_naive(x, w, b, conv_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    stride, pad = conv_param['stride'], conv_param['pad']
+    
+    x_pad = np.pad(x, ((0,),(0,),(pad,),(pad,)), 'constant', constant_values=0)
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    _, _, padH, padW = x_pad.shape
+    H_out = 1 + (H + 2*pad - HH) // stride
+    W_out = 1 + (W + 2*pad - WW) // stride
+    out = np.zeros((N, F, H_out, W_out))
+    
+    # compute in three loops :)
+    for f in range(F):
+        for idx,i in enumerate(range(0, padH-HH+1, stride)):
+            for idy,j in enumerate(range(0, padW-WW+1, stride)):
+                x_pad_mask = x_pad[:, :, i:i+HH, j:j+WW]
+                out[:,f,idx,idy] = np.sum(w[f] * x_pad_mask, axis=(1,2,3))+b[f]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -619,7 +633,31 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, w, b, conv_param = cache
+    stride, pad = conv_param['stride'], conv_param['pad']
+    x_pad = np.pad(x, ((0,), (0,), (pad,), (pad,)), 'constant', constant_values=0)
+    N, F, H_out, W_out = dout.shape
+    N, C, H, W = x.shape
+    F, _, HH, WW = w.shape
+    _, _, padH, padW = x_pad.shape
+    
+    # initalization
+    dx = np.zeros_like(x)
+    dx_pad = np.zeros_like(x_pad)
+    dw = np.zeros_like(w)
+    db = np.zeros_like(b)
+
+    db = np.sum(dout, axis = (0,2,3)) # need to divide N or not?
+    
+    for idx,i in enumerate(range(0, padH-HH+1, stride)):
+      for idy,j in enumerate(range(0, padW-WW+1, stride)):
+          x_pad_mask = x_pad[:, :, i:i+HH, j:j+WW]
+          for k in range(F): #compute dw
+              dw[k ,: ,: ,:] += np.sum(x_pad_mask * dout[:, k:k+1, idx:idx+1, idy:idy+1], axis=0)
+          for n in range(N): #compute dx_pad
+              dx_pad[n, :, i:i+HH, j:j+WW] += np.sum((w[:, :, :, :] *
+                                                 (dout[n, :, idx, idy])[:, np.newaxis, np.newaxis, np.newaxis]), axis=0)
+    dx = dx_pad[:, :, pad:-pad, pad:-pad]
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -653,7 +691,18 @@ def max_pool_forward_naive(x, pool_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = x.shape
+    HH, WW, stride = pool_param['pool_height'], pool_param['pool_width'], pool_param['stride']
+    
+    H_out = 1 + (H - HH) // stride
+    W_out = 1 + (W - WW) // stride
+    out = np.zeros((N, C, H_out, W_out))
+    
+    for idx,i in enumerate(range(0, H-HH+1, stride)):
+        for idy,j in enumerate(range(0, W-WW+1, stride)):
+            x_mask = x[:, :, i:i+HH, j:j+WW]
+            out[:,:,idx,idy] = np.max(x_mask, axis=(2,3))
+            
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -680,7 +729,20 @@ def max_pool_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, pool_param = cache
+    dx = np.zeros_like(x)
+    N, C, H, W = x.shape
+    _, _, H_out, W_out = dout.shape
+    HH, WW, stride = pool_param['pool_height'], pool_param['pool_width'], pool_param['stride']
+    
+    x_mask = None
+    for idx,i in enumerate(range(0, H-HH+1, stride)):
+        for idy,j in enumerate(range(0, W-WW+1, stride)):
+            x_mask = x[:, :, i:i+HH, j:j+WW]
+            Max = np.max(x_mask, axis=(2,3))[:, :, np.newaxis, np.newaxis]
+            x_mask = np.equal(x_mask, Max)
+            dx[:, :, i:i+HH, j:j+WW] = x_mask * dout[:,:,idx:idx+1,idy:idy+1]
+            
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -722,8 +784,11 @@ def spatial_batchnorm_forward(x, gamma, beta, bn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
-
+    N, C, H, W = x.shape
+    x = x.transpose(0, 2, 3, 1).reshape(-1, C)
+    out, cache = batchnorm_forward(x, gamma, beta, bn_param)
+    out = out.reshape(N, H, W, C).transpose(0, 3, 1, 2)
+    
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -756,7 +821,10 @@ def spatial_batchnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    N, C, H, W = dout.shape
+    dout = dout.transpose(0, 2, 3, 1).reshape(-1, C)
+    dx, dgamma, dbeta = batchnorm_backward_alt(dout, cache)
+    dx = dx.reshape(N, H, W, C).transpose(0, 3, 1, 2)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -775,8 +843,8 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
 
     Inputs:
     - x: Input data of shape (N, C, H, W)
-    - gamma: Scale parameter, of shape (C,)
-    - beta: Shift parameter, of shape (C,)
+    - gamma: Scale parameter, of shape (1, C, 1, 1)
+    - beta: Shift parameter, of shape (1, C, 1, 1)
     - G: Integer mumber of groups to split into, should be a divisor of C
     - gn_param: Dictionary with the following keys:
       - eps: Constant for numeric stability
@@ -796,7 +864,17 @@ def spatial_groupnorm_forward(x, gamma, beta, G, gn_param):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    
+    N, C, H, W = x.shape
+    x = x.reshape((N*G, -1))
+    sample_mean = np.sum(x, axis=1, keepdims=True) / (x.shape[1]) #(N*G, 1)
+    sample_var = np.sum((x-sample_mean)**2, axis=1, keepdims=True) / (x.shape[1]) #(N*G, -1)
+    xhat = (x-sample_mean) / np.sqrt(sample_var+eps) # (N*G, C//G, -1)
+          
+    xhat = xhat.reshape((N, C, H, W))
+    
+    out = gamma * xhat + beta
+    cache = (x, gamma, beta, eps)
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
@@ -826,7 +904,41 @@ def spatial_groupnorm_backward(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
 
-    pass
+    x, gamma, beta, eps = cache
+    N, D = x.shape
+    dout_g = dout.reshape((N,D))
+    # naively implemented by computation graph
+    # compute the intermediate values
+    mu = np.sum(x, axis=1, keepdims=True) / D
+    xmu = x - mu
+    sq = xmu**2
+    var = np.sum(sq, axis=1, keepdims=True) / D
+    sqrtvar = np.sqrt(var+eps)
+    ivar = 1 / sqrtvar
+    xhat_g = xmu * ivar
+    xhat = xhat_g.reshape(dout.shape)
+    
+    # backprop
+    dbeta = np.sum(dout, axis=(0,2,3)) # (C,)
+    dgamma = np.sum(dout*xhat, axis=(0,2,3))
+    dbeta = dbeta[np.newaxis, :, np.newaxis, np.newaxis]
+    dgamma = dgamma[np.newaxis, :, np.newaxis, np.newaxis]
+    
+    dxhat = dout * gamma
+    dxhat_g = dxhat.reshape((N,D))
+    
+    divar = np.sum(dxhat_g*xmu, axis=1, keepdims=True)
+    dxmu1 = dxhat_g * ivar
+    dsqrtvar = -1.0 * divar / (sqrtvar**2)
+    dvar = 0.5 * dsqrtvar / np.sqrt(var+eps)
+    dsq = np.ones((N, D)) * dvar / D
+    dxmu2 = 2 * xmu * dsq
+    dmu = -np.sum(dxmu1+dxmu2, axis=1, keepdims=True)
+    dx1 = dxmu1 + dxmu2
+    dx2 = np.ones((N, D)) * dmu / D
+    dx = dx1 + dx2
+    
+    dx = dx.reshape(dout.shape)       
 
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
